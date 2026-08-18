@@ -1,0 +1,17 @@
+server.py
+book.py
+static/
+data/
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+*.mp3
+*.wav
+*.m4a
+*.flac
+translation_01.md
+.env.local
+.vercel
+.git
+.gitignore

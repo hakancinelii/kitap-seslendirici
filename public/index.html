@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kitap Seslendirici</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="title" id="bookTitle">Kitap</span></div>
+    <div class="controls">
+      <label class="file-btn">
+        <input type="file" id="refInput" accept="audio/*" />
+        <span id="refLabel">🎤 Referans ses yükle</span>
+      </label>
+      <input type="text" id="controlInput" class="control-input"
+             placeholder="Ses yönergesi (opsiyonel)" />
+      <button id="playBtn" class="btn primary">▶ Oynat</button>
+      <button id="stopBtn" class="btn">■ Durdur</button>
+    </div>
+    <div class="progress-mini"><span id="progressText">…</span></div>
+  </header>
+
+  <div class="player-bar" id="playerBar">
+    <div class="player-status" id="playerStatus">Hazır değil</div>
+    <div class="player-text" id="playerText"></div>
+  </div>
+
+  <main id="book" class="book"></main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
