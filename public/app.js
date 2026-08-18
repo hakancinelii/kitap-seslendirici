@@ -9,6 +9,7 @@ const state = {
   reference: null,
   currentIndex: -1,
   selectedSegId: null,
+  editMode: false,
   playing: false,
 };
 
@@ -81,8 +82,7 @@ function renderBook() {
         span.dataset.segId = segId;
         span.addEventListener("click", (e) => {
           e.stopPropagation();
-          unlockAudio();
-          selectSentence(segId);
+          if (state.editMode) onSentenceTap(segId);
         });
         p.appendChild(span);
         p.appendChild(document.createTextNode(" "));
@@ -92,12 +92,14 @@ function renderBook() {
   }
 }
 
-function selectSentence(segId) {
-  state.selectedSegId = segId;
+function onSentenceTap(segId) {
   const idx = state.segIndexById[segId];
   if (idx === undefined) return;
-  $("revoiceBtn").disabled = false;
-  playFrom(idx);
+  const seg = state.segments[idx];
+  const ok = confirm("Bu cümleyi tekrar seslendirmek istiyor musunuz?\n\n" + seg.text);
+  if (!ok) return;
+  unlockAudio();
+  revoiceSentence(segId);
 }
 
 async function refreshStatus() {
@@ -233,9 +235,7 @@ async function playFrom(start) {
   if (state.playing) stopPlayback(true);
 }
 
-async function revoiceSelected() {
-  const segId = state.selectedSegId;
-  if (!segId) return;
+async function revoiceSentence(segId) {
   const idx = state.segIndexById[segId];
   if (idx === undefined) return;
   const seg = state.segments[idx];
@@ -243,6 +243,7 @@ async function revoiceSelected() {
   stopPlayback();
   state.playing = true;
   state.currentIndex = idx;
+  state.selectedSegId = segId;
   highlight();
   $("playerText").textContent = seg.text;
   $("playBtn").textContent = "▶ Oynatılıyor";
@@ -277,10 +278,11 @@ $("playBtn").addEventListener("click", () => {
 
 $("stopBtn").addEventListener("click", () => stopPlayback(false));
 
-$("revoiceBtn").addEventListener("click", () => {
-  if (!state.selectedSegId) return;
-  unlockAudio();
-  revoiceSelected();
+$("editBtn").addEventListener("click", () => {
+  state.editMode = !state.editMode;
+  $("editBtn").classList.toggle("on", state.editMode);
+  $("editBtn").textContent = state.editMode ? "✏️ Düzeltme Açık" : "✏️ Cümle Düzelt";
+  $("book").classList.toggle("editing", state.editMode);
 });
 
 $("refInput").addEventListener("change", async (e) => {

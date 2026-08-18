@@ -73,6 +73,7 @@ html, body {
 .btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
 .btn.primary:hover { background: #9c3c22; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 .progress-mini { font-size: 12px; color: var(--muted); white-space: nowrap; }
 
@@ -110,12 +111,13 @@ html, body {
 .book p.para-active { box-shadow: inset 4px 0 0 var(--accent); }
 
 .book .sentence {
-  cursor: pointer;
+  cursor: default;
   padding: 2px 1px;
   border-radius: 4px;
   transition: background 0.15s ease;
 }
-.book .sentence:hover { background: #efeae0; }
+.book.editing .sentence { cursor: pointer; }
+.book.editing .sentence:hover { background: #f2e0d8; }
 .book .sentence.active {
   background: var(--accent-soft);
   box-shadow: 0 0 0 2px var(--accent);
