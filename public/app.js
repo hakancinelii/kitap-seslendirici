@@ -91,6 +91,11 @@ function renderBook() {
     } else if (item.type === "paragraph") {
       const p = document.createElement("p");
       p.dataset.paraId = item.id;
+      p.addEventListener("click", () => {
+        if (state.editMode) return;
+        unlockAudio();
+        playFrom(paraStartIndex(item.id));
+      });
       for (const segId of item.segment_ids) {
         const seg = state.segById[segId];
         const span = document.createElement("span");
@@ -98,8 +103,7 @@ function renderBook() {
         span.textContent = seg.text;
         span.dataset.segId = segId;
         span.addEventListener("click", (e) => {
-          e.stopPropagation();
-          if (state.editMode) onSentenceTap(segId);
+          if (state.editMode) { e.stopPropagation(); onSentenceTap(segId); }
         });
         p.appendChild(span);
         p.appendChild(document.createTextNode(" "));
@@ -107,6 +111,11 @@ function renderBook() {
       bookEl.appendChild(p);
     }
   }
+}
+
+function paraStartIndex(paraId) {
+  const i = state.segments.findIndex((s) => s.para_id === paraId);
+  return i >= 0 ? i : 0;
 }
 
 function onSentenceTap(segId) {
