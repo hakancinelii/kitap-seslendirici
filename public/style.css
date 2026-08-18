@@ -110,7 +110,6 @@ html, body {
   transition: background 0.2s ease, box-shadow 0.2s ease;
 }
 .book p:hover { background: #efeae0; }
-.book p.para-active { box-shadow: inset 4px 0 0 var(--accent); }
 
 .book .sentence {
   padding: 2px 1px;
@@ -119,10 +118,6 @@ html, body {
 }
 .book.editing .sentence { cursor: pointer; }
 .book.editing .sentence:hover { background: #f2e0d8; }
-.book .sentence.active {
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 2px var(--accent);
-}
 .book .sentence.done { opacity: 0.55; }
 
 @media (max-width: 640px) {

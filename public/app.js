@@ -204,17 +204,10 @@ function playOn(player, url) {
 }
 
 function highlight() {
-  document.querySelectorAll(".book .sentence").forEach((s) => s.classList.remove("active"));
-  document.querySelectorAll(".book p").forEach((p) => p.classList.remove("para-active"));
   const seg = state.segments[state.currentIndex];
   if (!seg) return;
   const span = document.querySelector(`.book .sentence[data-seg-id="${seg.id}"]`);
-  if (span) {
-    span.classList.add("active");
-    const p = span.closest("p");
-    if (p) p.classList.add("para-active");
-    span.scrollIntoView({ behavior: "smooth", block: "center" });
-  }
+  if (span) span.scrollIntoView({ behavior: "smooth", block: "center" });
 }
 
 async function playFrom(start) {
