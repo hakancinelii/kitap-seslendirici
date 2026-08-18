@@ -277,6 +277,10 @@ def main() -> int:
         time.sleep(args.delay)
 
     print(f"\nTamamlandi. Toplam {done_count}/{len(segments)} segment hazir.")
+    if done_count < len(segments):
+        missing = len(segments) - done_count
+        print(f"{missing} segment eksik, tekrar calistirinca yeniden denecek.", file=sys.stderr)
+        return 1
     return 0
 
 
