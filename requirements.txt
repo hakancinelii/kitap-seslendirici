@@ -1,0 +1,5 @@
+gradio_client
+fastapi
+uvicorn
+requests
+python-multipart
