@@ -1,5 +1,7 @@
 server.py
 book.py
+narrate.py
+scripts/
 static/
 data/
 .venv/
@@ -10,6 +12,7 @@ __pycache__/
 *.wav
 *.m4a
 *.flac
+*.jpg
 translation_01.md
 .env.local
 .vercel
