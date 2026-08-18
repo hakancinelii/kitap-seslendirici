@@ -1,7 +1,5 @@
 {
   "functions": {
-    "api/generate.py": { "maxDuration": 60 },
-    "api/reference.py": { "maxDuration": 30 },
-    "api/status.py": { "maxDuration": 10 }
+    "app.py": { "maxDuration": 60 }
   }
 }
