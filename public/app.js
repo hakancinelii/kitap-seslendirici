@@ -9,8 +9,8 @@ const state = {
   playing: false,
 };
 
-const audio = new Audio();
-audio.preload = "auto";
+const players = [new Audio(), new Audio()];
+players.forEach((p) => { p.preload = "auto"; });
 
 const genInFlight = {};
 const $ = (id) => document.getElementById(id);
@@ -19,11 +19,13 @@ const SILENT_WAV =
   "data:audio/wav;base64,UklGRmQGAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YUAGAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
 
 function unlockAudio() {
-  const prev = audio.src;
-  audio.muted = true;
-  audio.src = SILENT_WAV;
-  audio.play().then(() => { audio.pause(); audio.currentTime = 0; }).catch(() => {})
-    .finally(() => { audio.muted = false; audio.src = prev || ""; });
+  players.forEach((a) => {
+    const prev = a.src;
+    a.muted = true;
+    a.src = SILENT_WAV;
+    a.play().then(() => { a.pause(); a.currentTime = 0; }).catch(() => {})
+      .finally(() => { a.muted = false; a.src = prev || ""; });
+  });
 }
 
 async function fetchJSON(url, options) {
@@ -137,15 +139,17 @@ function ensureSeg(index) {
   return genInFlight[seg.id];
 }
 
-function playAudio(url) {
+function playOn(player, url) {
   return new Promise((resolve) => {
     let done = false;
-    const finish = () => { if (!done) { done = true; audio.onended = null; audio.onerror = null; resolve(); } };
-    audio.onended = finish;
-    audio.onerror = finish;
-    audio.src = url;
+    const finish = () => { if (!done) { done = true; player.onended = null; player.onerror = null; resolve(); } };
+    player.onended = finish;
+    player.onerror = finish;
+    if (player.src !== url) {
+      player.src = url;
+    }
     $("playerStatus").textContent = "Okuyor";
-    audio.play().catch(() => finish());
+    player.play().catch(() => finish());
   });
 }
 
@@ -166,22 +170,39 @@ async function playFrom(start) {
   state.currentIndex = start;
   $("playBtn").textContent = "▶ Oynatılıyor";
 
-  while (state.playing && state.currentIndex < state.segments.length) {
-    const seg = state.segments[state.currentIndex];
+  const N = state.segments.length;
+  const which = (i) => players[(i - start) % 2];
+
+  const preloadInto = (i) => {
+    if (i < 0 || i >= N) return;
+    ensureSeg(i).then((u) => {
+      const p = which(i);
+      if (p.src !== u) { p.src = u; p.load(); }
+    }).catch(() => {});
+  };
+
+  preloadInto(start);
+  preloadInto(start + 1);
+
+  while (state.playing && state.currentIndex < N) {
+    const i = state.currentIndex;
+    const seg = state.segments[i];
     $("playerText").textContent = seg.text;
     highlight();
-    const next = state.currentIndex + 1;
-    if (next < state.segments.length) ensureSeg(next); // lookahead
+    const player = which(i);
+
     try {
-      const url = await ensureSeg(state.currentIndex);
+      const url = await ensureSeg(i);
       if (!state.playing) break;
-      await playAudio(url);
+      if (player.src !== url) { player.src = url; player.load(); }
+      await playOn(player, url);
     } catch (e) {
       $("playerStatus").textContent = "Hata: " + e.message;
       stopPlayback();
       return;
     }
     state.currentIndex++;
+    preloadInto(state.currentIndex + 1);
     updateDoneClasses();
   }
   if (state.playing) stopPlayback(true);
@@ -189,9 +210,11 @@ async function playFrom(start) {
 
 function stopPlayback(finished) {
   state.playing = false;
-  audio.pause();
-  audio.onended = null;
-  audio.onerror = null;
+  players.forEach((p) => {
+    p.pause();
+    p.onended = null;
+    p.onerror = null;
+  });
   $("playBtn").textContent = "▶ Oynat";
   $("playerStatus").textContent = finished ? "Bitti" : "Durduruldu";
 }
