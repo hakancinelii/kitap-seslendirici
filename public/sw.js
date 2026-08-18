@@ -1,6 +1,6 @@
 "use strict";
 
-const CACHE = "kitap-seslendirici-v1";
+const CACHE = "kitap-seslendirici-v2";
 const APP_SHELL = [
   "/",
   "/app.js",
@@ -29,25 +29,23 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("fetch", (event) => {
-  const url = new URL(event.request.url);
+  const req = event.request;
+  if (req.method !== "GET") return;
+  const url = new URL(req.url);
 
-  if (event.request.method !== "GET") return;
-
-  // API ve ses dosyalari: once ag (Blob URL'leri zaten ayri origin, dokunma)
+  if (url.origin !== location.origin) return;
   if (url.pathname.startsWith("/api/")) return;
 
+  // Network-first: taze icerik, cevrimdisiyken cache'e dus.
   event.respondWith(
-    caches.match(event.request).then((cached) => {
-      const network = fetch(event.request)
-        .then((response) => {
-          if (response && response.ok) {
-            const clone = response.clone();
-            caches.open(CACHE).then((cache) => cache.put(event.request, clone));
-          }
-          return response;
-        })
-        .catch(() => cached);
-      return cached || network;
-    })
+    fetch(req)
+      .then((response) => {
+        if (response && response.ok) {
+          const clone = response.clone();
+          caches.open(CACHE).then((cache) => cache.put(req, clone));
+        }
+        return response;
+      })
+      .catch(() => caches.match(req))
   );
 });

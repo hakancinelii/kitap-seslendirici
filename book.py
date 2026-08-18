@@ -4,7 +4,8 @@ from pathlib import Path
 from typing import List, Optional
 
 
-MAX_SEGMENT_CHARS = 220
+MAX_SENTENCE_CHARS = 300
+MIN_SENTENCE_CHARS = 40
 
 
 _DECORATIVE_SYMBOLS = re.compile("[\u2600-\u27BF\uFE0F]+")
@@ -59,21 +60,21 @@ def _split_sentences(text: str) -> List[str]:
     return [p.strip() for p in parts if p.strip()]
 
 
-def _split_overlong(sentence: str) -> List[str]:
-    if len(sentence) <= MAX_SEGMENT_CHARS:
+def _split_overlong(sentence: str, limit: int = MAX_SENTENCE_CHARS) -> List[str]:
+    if len(sentence) <= limit:
         return [sentence]
     out: List[str] = []
     for clause in _OVERLONG_SPLIT.split(sentence):
         clause = clause.strip()
         if not clause:
             continue
-        if len(clause) <= MAX_SEGMENT_CHARS:
+        if len(clause) <= limit:
             out.append(clause)
             continue
         words = clause.split(" ")
         buf = ""
         for w in words:
-            if buf and len(buf) + 1 + len(w) > MAX_SEGMENT_CHARS:
+            if buf and len(buf) + 1 + len(w) > limit:
                 out.append(buf)
                 buf = w
             else:
@@ -92,25 +93,21 @@ def _split_paragraph(text: str, para_id: str, seg_id_start: int) -> List[Segment
             continue
         fragments.extend(_split_overlong(cleaned))
 
-    segments: List[str] = []
-    buf: List[str] = []
-    buf_len = 0
+    units: List[str] = []
+    buf = ""
     for frag in fragments:
-        if buf and buf_len + 1 + len(frag) > MAX_SEGMENT_CHARS:
-            segments.append(" ".join(buf))
-            buf = [frag]
-            buf_len = len(frag)
-        else:
-            if buf:
-                buf_len += 1 + len(frag)
-            else:
-                buf_len = len(frag)
-            buf.append(frag)
+        buf = f"{buf} {frag}".strip() if buf else frag
+        if len(buf) >= MIN_SENTENCE_CHARS:
+            units.append(buf)
+            buf = ""
     if buf:
-        segments.append(" ".join(buf))
+        if units:
+            units[-1] = f"{units[-1]} {buf}".strip()
+        else:
+            units.append(buf)
 
     result: List[Segment] = []
-    for i, seg_text in enumerate(segments):
+    for i, seg_text in enumerate(units):
         result.append(
             Segment(
                 id=f"seg_{seg_id_start + i}",

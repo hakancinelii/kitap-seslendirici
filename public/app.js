@@ -3,9 +3,12 @@
 const state = {
   book: null,
   segments: [],
+  segById: {},
+  segIndexById: {},
   doneBySegId: {},
   reference: null,
   currentIndex: -1,
+  selectedSegId: null,
   playing: false,
 };
 
@@ -28,6 +31,8 @@ function unlockAudio() {
   });
 }
 
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
 async function fetchJSON(url, options) {
   const r = await fetch(url, options);
   if (!r.ok) throw new Error(r.status + " " + r.statusText);
@@ -44,6 +49,10 @@ async function loadBook() {
   const data = await fetchJSON("/book.json");
   state.book = data;
   state.segments = data.segments;
+  data.segments.forEach((s, i) => {
+    state.segById[s.id] = s;
+    state.segIndexById[s.id] = i;
+  });
   renderBook();
   $("bookTitle").textContent = data.title;
   $("controlInput").value = localStorage.getItem("control") || "";
@@ -63,17 +72,32 @@ function renderBook() {
       bookEl.appendChild(el);
     } else if (item.type === "paragraph") {
       const p = document.createElement("p");
-      p.textContent = item.text;
       p.dataset.paraId = item.id;
-      p.addEventListener("click", () => { unlockAudio(); playFrom(paraStartIndex(item.id)); });
+      for (const segId of item.segment_ids) {
+        const seg = state.segById[segId];
+        const span = document.createElement("span");
+        span.className = "sentence";
+        span.textContent = seg.text;
+        span.dataset.segId = segId;
+        span.addEventListener("click", (e) => {
+          e.stopPropagation();
+          unlockAudio();
+          selectSentence(segId);
+        });
+        p.appendChild(span);
+        p.appendChild(document.createTextNode(" "));
+      }
       bookEl.appendChild(p);
     }
   }
 }
 
-function paraStartIndex(paraId) {
-  const i = state.segments.findIndex((s) => s.para_id === paraId);
-  return i >= 0 ? i : 0;
+function selectSentence(segId) {
+  state.selectedSegId = segId;
+  const idx = state.segIndexById[segId];
+  if (idx === undefined) return;
+  $("revoiceBtn").disabled = false;
+  playFrom(idx);
 }
 
 async function refreshStatus() {
@@ -93,6 +117,10 @@ async function refreshStatus() {
 }
 
 function updateDoneClasses() {
+  document.querySelectorAll(".book .sentence").forEach((s) => {
+    if (state.doneBySegId[s.dataset.segId]) s.classList.add("done");
+    else s.classList.remove("done");
+  });
   document.querySelectorAll(".book p").forEach((p) => {
     const item = state.book.items.find((i) => i.id === p.dataset.paraId);
     if (item && item.segment_ids && item.segment_ids.every((id) => state.doneBySegId[id])) {
@@ -103,39 +131,35 @@ function updateDoneClasses() {
   });
 }
 
-function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+async function generateSeg(segId, text) {
+  let lastErr = null;
+  for (let a = 0; a < 4; a++) {
+    $("playerStatus").textContent = "Ses üretiliyor… (deneme " + (a + 1) + ")";
+    try {
+      const r = await fetchJSON("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seg_id: segId, text: text, control: controlValue() }),
+      });
+      if (r && r.url) {
+        state.doneBySegId[segId] = r.url;
+        return r.url;
+      }
+      throw new Error("URL yok");
+    } catch (e) {
+      lastErr = e;
+      await sleep(2500 * (a + 1));
+    }
+  }
+  throw lastErr || new Error("üretim başarısız");
+}
 
 function ensureSeg(index) {
   if (index < 0 || index >= state.segments.length) return Promise.resolve(null);
   const seg = state.segments[index];
   if (state.doneBySegId[seg.id]) return Promise.resolve(state.doneBySegId[seg.id]);
   if (genInFlight[seg.id]) return genInFlight[seg.id];
-
-  const MAX_TRY = 4;
-  genInFlight[seg.id] = (async () => {
-    let lastErr = null;
-    for (let a = 0; a < MAX_TRY; a++) {
-      $("playerStatus").textContent = "Ses üretiliyor… (" + (index + 1) + "/" + state.segments.length +
-        (a > 0 ? ", deneme " + (a + 1) : "") + ")";
-      try {
-        const r = await fetchJSON("/api/generate", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ seg_id: seg.id, text: seg.text, control: controlValue() }),
-        });
-        if (r && r.url) {
-          state.doneBySegId[seg.id] = r.url;
-          return r.url;
-        }
-        throw new Error("URL yok");
-      } catch (e) {
-        lastErr = e;
-        await sleep(2500 * (a + 1));
-      }
-    }
-    throw lastErr || new Error("üretim başarısız");
-  })().finally(() => { delete genInFlight[seg.id]; });
-
+  genInFlight[seg.id] = generateSeg(seg.id, seg.text).finally(() => { delete genInFlight[seg.id]; });
   return genInFlight[seg.id];
 }
 
@@ -145,22 +169,23 @@ function playOn(player, url) {
     const finish = () => { if (!done) { done = true; player.onended = null; player.onerror = null; resolve(); } };
     player.onended = finish;
     player.onerror = finish;
-    if (player.src !== url) {
-      player.src = url;
-    }
+    if (player.src !== url) player.src = url;
     $("playerStatus").textContent = "Okuyor";
     player.play().catch(() => finish());
   });
 }
 
 function highlight() {
-  document.querySelectorAll(".book p").forEach((p) => p.classList.remove("active"));
+  document.querySelectorAll(".book .sentence").forEach((s) => s.classList.remove("active"));
+  document.querySelectorAll(".book p").forEach((p) => p.classList.remove("para-active"));
   const seg = state.segments[state.currentIndex];
   if (!seg) return;
-  const el = document.querySelector(`.book p[data-para-id="${seg.para_id}"]`);
-  if (el) {
-    el.classList.add("active");
-    el.scrollIntoView({ behavior: "smooth", block: "center" });
+  const span = document.querySelector(`.book .sentence[data-seg-id="${seg.id}"]`);
+  if (span) {
+    span.classList.add("active");
+    const p = span.closest("p");
+    if (p) p.classList.add("para-active");
+    span.scrollIntoView({ behavior: "smooth", block: "center" });
   }
 }
 
@@ -208,6 +233,30 @@ async function playFrom(start) {
   if (state.playing) stopPlayback(true);
 }
 
+async function revoiceSelected() {
+  const segId = state.selectedSegId;
+  if (!segId) return;
+  const idx = state.segIndexById[segId];
+  if (idx === undefined) return;
+  const seg = state.segments[idx];
+
+  stopPlayback();
+  state.playing = true;
+  state.currentIndex = idx;
+  highlight();
+  $("playerText").textContent = seg.text;
+  $("playBtn").textContent = "▶ Oynatılıyor";
+
+  try {
+    const url = await generateSeg(seg.id, seg.text);
+    if (!state.playing) return;
+    await playOn(players[0], url);
+  } catch (e) {
+    $("playerStatus").textContent = "Hata: " + e.message;
+  }
+  stopPlayback(true);
+}
+
 function stopPlayback(finished) {
   state.playing = false;
   players.forEach((p) => {
@@ -227,6 +276,12 @@ $("playBtn").addEventListener("click", () => {
 });
 
 $("stopBtn").addEventListener("click", () => stopPlayback(false));
+
+$("revoiceBtn").addEventListener("click", () => {
+  if (!state.selectedSegId) return;
+  unlockAudio();
+  revoiceSelected();
+});
 
 $("refInput").addEventListener("change", async (e) => {
   const file = e.target.files && e.target.files[0];
