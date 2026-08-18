@@ -5,8 +5,6 @@ import time
 import requests
 from flask import Flask, jsonify, request
 
-BLOB_API = "https://blob.vercel-storage.com"
-
 BACKENDS = [
     {"url": "https://voxcpm.modelbest.cn", "voxcpm2": True},
 ]
@@ -16,38 +14,65 @@ FIXED_USER_ID = "42"
 app = Flask(__name__)
 
 
-def _auth():
-    token = os.environ.get("BLOB_READ_WRITE_TOKEN")
-    if not token:
-        raise RuntimeError("BLOB_READ_WRITE_TOKEN not set")
-    return {"Authorization": "Bearer " + token}
+def _supabase():
+    url = os.environ.get("SUPABASE_URL", "").rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_KEY", "")
+    bucket = os.environ.get("SUPABASE_BUCKET", "audio")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL/SERVICE_KEY not set")
+    return url, key, bucket
 
 
-def blob_list(prefix, limit=1000):
-    r = requests.get(BLOB_API, params={"prefix": prefix, "limit": limit}, headers=_auth(), timeout=15)
-    r.raise_for_status()
-    return r.json().get("blobs", [])
+def _supabase_headers():
+    key = _supabase()[1]
+    return {"Authorization": "Bearer " + key, "apikey": key}
 
 
-def blob_put(pathname, data, content_type):
+def supabase_list(prefix, limit=1000):
+    url, _, bucket = _supabase()
+    out = []
+    offset = 0
+    while True:
+        r = requests.post(
+            f"{url}/storage/v1/object/list/{bucket}",
+            headers={**_supabase_headers(), "Content-Type": "application/json"},
+            json={"prefix": prefix, "limit": limit, "offset": offset},
+            timeout=15,
+        )
+        r.raise_for_status()
+        items = r.json()
+        if not items:
+            break
+        out.extend(items)
+        if len(items) < limit:
+            break
+        offset += limit
+    return out
+
+
+def supabase_upload(pathname, data, content_type="audio/mpeg"):
+    url, _, bucket = _supabase()
     r = requests.put(
-        BLOB_API + "/" + pathname,
-        headers={**_auth(), "Content-Type": content_type},
+        f"{url}/storage/v1/object/{bucket}/{pathname}",
+        headers={**_supabase_headers(), "Content-Type": content_type, "x-upsert": "true"},
         data=data,
         timeout=60,
     )
     r.raise_for_status()
-    return r.json()
+    return f"{url}/storage/v1/object/public/{bucket}/{pathname}"
 
 
 def _get_reference():
-    refs = blob_list("reference/")
+    url, _, bucket = _supabase()
+    refs = supabase_list("reference/")
     if not refs:
         return None
-    latest = max(refs, key=lambda b: b.get("uploadedAt", ""))
-    url = latest.get("url")
-    ext = os.path.splitext(latest.get("pathname", "ref.mp3"))[1] or ".mp3"
-    data = requests.get(url, timeout=30).content
+    names = [b.get("name", "") for b in refs if b.get("name")]
+    if not names:
+        return None
+    name = sorted(names)[-1]
+    ext = os.path.splitext(name)[1] or ".mp3"
+    data = requests.get(f"{url}/storage/v1/object/public/{bucket}/reference/{name}", timeout=30).content
     path = f"/tmp/reference{ext}"
     with open(path, "wb") as f:
         f.write(data)
@@ -140,8 +165,8 @@ def generate(path=""):
             audio = _generate_once(session, base, cfg["voxcpm2"], ref_file, text, control)
             if len(audio) < 1000:
                 raise RuntimeError("cok kucuk ses")
-            blob = blob_put(f"audio/{seg_id}.mp3", audio, "audio/mpeg")
-            return jsonify({"ok": True, "seg_id": seg_id, "url": blob.get("url")})
+            url = supabase_upload(f"audio/{seg_id}.mp3", audio, "audio/mpeg")
+            return jsonify({"ok": True, "seg_id": seg_id, "url": url})
         except Exception as exc:  # noqa: BLE001
             last_err = str(exc)
 

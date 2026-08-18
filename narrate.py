@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Kitap seslendirme — VoxCPM ile ön-üretim + Vercel Blob yükleme.
+"""Kitap seslendirme — VoxCPM ile ön-üretim + Supabase Storage yükleme.
 
-Sesleri yerel olarak üretip Vercel Blob'a yükler. Canlı okuyucu
+Sesleri yerel olarak üretip Supabase Storage'a yükler. Canlı okuyucu
 (/api/status) bu dosyaları görür ve hazır sesleri çalar; böylece
 Vercel'in 60 sn fonksiyon limitine takılmaz.
 
@@ -27,8 +27,6 @@ sys.path.insert(0, str(BASE_DIR))
 
 from book import parse_book  # noqa: E402
 
-BLOB_API = "https://blob.vercel-storage.com"
-
 # Birinci = resmi ModelBest VoxCPM2 (10 parametre), ikinci = HF demo (8 parametre).
 # NOT: Ses tutarliligi icin TEK backend kullanilir (modelbest). HF demo farkli
 # model/ses urettiginden yedek olarak dahil EDILMEMISTIR.
@@ -51,33 +49,48 @@ def _load_env(path: Path) -> None:
         os.environ.setdefault(key.strip(), value)
 
 
-def blob_token() -> str:
-    token = os.environ.get("BLOB_READ_WRITE_TOKEN", "").strip()
-    if not token:
-        raise RuntimeError("BLOB_READ_WRITE_TOKEN tanimli degil (.env.local veya ortam).")
-    return token
+def _supabase_cfg() -> tuple[str, str, str]:
+    url = os.environ.get("SUPABASE_URL", "").strip().rstrip("/")
+    key = os.environ.get("SUPABASE_SERVICE_KEY", "").strip()
+    bucket = os.environ.get("SUPABASE_BUCKET", "audio").strip()
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL/SERVICE_KEY tanimli degil (.env.local veya ortam).")
+    return url, key, bucket
 
 
-def blob_list(prefix: str, limit: int = 1000) -> list[dict]:
-    r = requests.get(
-        BLOB_API,
-        params={"prefix": prefix, "limit": limit},
-        headers={"Authorization": "Bearer " + blob_token()},
-        timeout=30,
-    )
-    r.raise_for_status()
-    return r.json().get("blobs", [])
-
-
-def blob_put(pathname: str, data: bytes, content_type: str = "audio/mpeg") -> str:
+def supabase_upload(pathname: str, data: bytes, content_type: str = "audio/mpeg") -> str:
+    url, key, bucket = _supabase_cfg()
     r = requests.put(
-        BLOB_API + "/" + pathname,
-        headers={"Authorization": "Bearer " + blob_token(), "Content-Type": content_type},
+        f"{url}/storage/v1/object/{bucket}/{pathname}",
+        headers={"Authorization": "Bearer " + key, "apikey": key,
+                 "Content-Type": content_type, "x-upsert": "true"},
         data=data,
         timeout=120,
     )
     r.raise_for_status()
-    return r.json().get("url")
+    return f"{url}/storage/v1/object/public/{bucket}/{pathname}"
+
+
+def supabase_list(prefix: str, limit: int = 1000) -> list[dict]:
+    url, key, bucket = _supabase_cfg()
+    out: list[dict] = []
+    offset = 0
+    while True:
+        r = requests.post(
+            f"{url}/storage/v1/object/list/{bucket}",
+            headers={"Authorization": "Bearer " + key, "apikey": key, "Content-Type": "application/json"},
+            json={"prefix": prefix, "limit": limit, "offset": offset},
+            timeout=30,
+        )
+        r.raise_for_status()
+        items = r.json()
+        if not items:
+            break
+        out.extend(items)
+        if len(items) < limit:
+            break
+        offset += limit
+    return out
 
 
 class VoxCPMBackend:
@@ -203,15 +216,15 @@ def main() -> int:
         print(f"Referans ses bulunamadi: {args.reference}", file=sys.stderr)
         return 1
 
-    print("Blob'daki mevcut sesler kontrol ediliyor...")
+    print("Supabase'teki mevcut sesler kontrol ediliyor...")
     existing = set()
     try:
-        for b in blob_list("audio/"):
-            pn = b.get("pathname", "")
-            if pn.startswith("audio/") and pn.endswith(".mp3"):
-                existing.add(pn[len("audio/"):-len(".mp3")])
+        for b in supabase_list("audio/"):
+            name = b.get("name", "")
+            if name.endswith(".mp3"):
+                existing.add(name[:-len(".mp3")])
     except Exception as exc:
-        print(f"Uyari: Blob listelenemedi ({exc}); resume kapali.", file=sys.stderr)
+        print(f"Uyari: Supabase listelenemedi ({exc}); resume kapali.", file=sys.stderr)
 
     print(f"Mevcut: {len(existing)} / {len(segments)}")
 
@@ -268,8 +281,8 @@ def main() -> int:
             continue
 
         if not args.dry_run:
-            url = blob_put(f"audio/{seg.id}.mp3", audio)
-            print(f"  Blob'a yuklendi: {url}")
+            url = supabase_upload(f"audio/{seg.id}.mp3", audio)
+            print(f"  Supabase'e yuklendi: {url}")
             existing.add(seg.id)
         else:
             existing.add(seg.id)
