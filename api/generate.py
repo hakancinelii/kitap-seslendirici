@@ -65,38 +65,9 @@ def _call_voxcpm(text, control, ref_path):
     )
 
 
-@app.route("/api/status")
-def status():
-    audio = blob_list("audio/")
-    done = []
-    for b in audio:
-        pn = b.get("pathname", "")
-        if pn.startswith("audio/") and pn.endswith(".mp3"):
-            done.append({"seg_id": pn[len("audio/"):-len(".mp3")], "url": b.get("url")})
-    refs = blob_list("reference/")
-    reference = None
-    if refs:
-        latest = max(refs, key=lambda b: b.get("uploadedAt", ""))
-        reference = {"url": latest.get("url"), "pathname": latest.get("pathname")}
-    return jsonify({"done": done, "reference": reference})
-
-
-@app.route("/api/reference", methods=["POST"])
-def upload_reference():
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "file gerekli"}), 400
-    data = f.read()
-    if not data:
-        return jsonify({"error": "bos dosya"}), 400
-    ext = os.path.splitext(f.filename or "")[1].lower() or ".mp3"
-    content_type = "audio/mpeg" if ext == ".mp3" else "audio/wav"
-    blob = blob_put("reference/ref" + ext, data, content_type)
-    return jsonify({"ok": True, "url": blob.get("url"), "pathname": blob.get("pathname")})
-
-
-@app.route("/api/generate", methods=["POST"])
-def generate():
+@app.route("/", defaults={"path": ""}, methods=["GET", "POST"])
+@app.route("/<path:path>", methods=["GET", "POST"])
+def generate(path=""):
     body = request.get_json(silent=True) or {}
     seg_id = body.get("seg_id")
     text = (body.get("text") or "").strip()
@@ -123,7 +94,3 @@ def generate():
         data = f.read()
     blob = blob_put(f"audio/{seg_id}.mp3", data, "audio/mpeg")
     return jsonify({"ok": True, "seg_id": seg_id, "url": blob.get("url")})
-
-
-if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=8000)
