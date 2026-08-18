@@ -34,6 +34,21 @@ function unlockAudio() {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+function savePosition() {
+  try { localStorage.setItem("lastPos", String(state.currentIndex)); } catch (e) { /* ignore */ }
+}
+
+function restorePosition() {
+  try {
+    const saved = parseInt(localStorage.getItem("lastPos") || "", 10);
+    if (!isNaN(saved) && saved >= 0 && saved < state.segments.length) {
+      state.currentIndex = saved;
+      return;
+    }
+  } catch (e) { /* ignore */ }
+  state.currentIndex = 0;
+}
+
 async function fetchJSON(url, options) {
   const r = await fetch(url, options);
   if (!r.ok) throw new Error(r.status + " " + r.statusText);
@@ -59,6 +74,8 @@ async function loadBook() {
   $("controlInput").value = localStorage.getItem("control") || "";
   $("controlInput").addEventListener("change", controlValue);
   await refreshStatus();
+  restorePosition();
+  if (state.currentIndex > 0) highlight();
   setInterval(refreshStatus, 20000);
 }
 
@@ -195,6 +212,7 @@ async function playFrom(start) {
   stopPlayback();
   state.playing = true;
   state.currentIndex = start;
+  savePosition();
   $("playBtn").textContent = "▶ Oynatılıyor";
 
   const N = state.segments.length;
@@ -229,6 +247,7 @@ async function playFrom(start) {
       return;
     }
     state.currentIndex++;
+    savePosition();
     preloadInto(state.currentIndex + 1);
     updateDoneClasses();
   }
