@@ -9,8 +9,9 @@ BLOB_API = "https://blob.vercel-storage.com"
 
 BACKENDS = [
     {"url": "https://voxcpm.modelbest.cn", "voxcpm2": True},
-    {"url": "https://openbmb-voxcpm-demo.hf.space", "voxcpm2": False},
 ]
+
+FIXED_USER_ID = "42"
 
 app = Flask(__name__)
 
@@ -74,7 +75,7 @@ def _upload_reference(session, base, ref_path):
 
 def _generate_once(session, base, voxcpm2, ref_file, text, control):
     if voxcpm2:
-        data = [text, control, ref_file, False, "", 2.0, False, False, 10, "kitap-online"]
+        data = [text, control, ref_file, False, "", 2.0, False, False, 10, FIXED_USER_ID]
     else:
         data = [text, control, ref_file, False, "", 2.0, False, False]
     resp = session.post(f"{base}/gradio_api/call/generate", json={"data": data}, timeout=30)

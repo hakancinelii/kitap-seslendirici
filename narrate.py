@@ -29,11 +29,14 @@ from book import parse_book  # noqa: E402
 
 BLOB_API = "https://blob.vercel-storage.com"
 
-# Birinci = resmi ModelBest VoxCPM2 (10 parametre), ikinci = HF demo (8 parametre)
+# Birinci = resmi ModelBest VoxCPM2 (10 parametre), ikinci = HF demo (8 parametre).
+# NOT: Ses tutarliligi icin TEK backend kullanilir (modelbest). HF demo farkli
+# model/ses urettiginden yedek olarak dahil EDILMEMISTIR.
 BACKENDS = [
     {"url": "https://voxcpm.modelbest.cn", "voxcpm2": True},
-    {"url": "https://openbmb-voxcpm-demo.hf.space", "voxcpm2": False},
 ]
+
+FIXED_USER_ID = "42"
 
 
 def _load_env(path: Path) -> None:
@@ -109,7 +112,7 @@ class VoxCPMBackend:
             data = [
                 text, control, self._ref_file,
                 False, "", cfg, False, denoise,
-                10, f"kitap-{int(time.time() * 1000) % 100000}",
+                10, FIXED_USER_ID,
             ]
         else:
             data = [text, control, self._ref_file, False, "", cfg, False, denoise]
