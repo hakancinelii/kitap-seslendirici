@@ -125,7 +125,7 @@ html, body {
 }
 .book.editing .sentence { cursor: pointer; }
 .book.editing .sentence:hover { background: #f2e0d8; }
-.book .sentence.done { opacity: 0.55; }
+.book .sentence.pending { opacity: 0.45; }
 
 @media (max-width: 640px) {
   .topbar {

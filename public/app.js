@@ -142,16 +142,8 @@ async function refreshStatus() {
 
 function updateDoneClasses() {
   document.querySelectorAll(".book .sentence").forEach((s) => {
-    if (state.doneBySegId[s.dataset.segId]) s.classList.add("done");
-    else s.classList.remove("done");
-  });
-  document.querySelectorAll(".book p").forEach((p) => {
-    const item = state.book.items.find((i) => i.id === p.dataset.paraId);
-    if (item && item.segment_ids && item.segment_ids.every((id) => state.doneBySegId[id])) {
-      p.classList.add("done");
-    } else {
-      p.classList.remove("done");
-    }
+    if (state.doneBySegId[s.dataset.segId]) s.classList.remove("pending");
+    else s.classList.add("pending");
   });
 }
 
