@@ -16,6 +16,12 @@ app = Flask(__name__)
 
 _TURKISH_CHARS = set("çğıöşüâîûÇĞİÖŞÜÂÎÛ")
 _PAREN = re.compile(r"\(([^()]*)\)")
+PRONUNCIATION_MAP = {
+    "Mason": "Mâson",
+    "mason": "mâson",
+    "Loca": "Loja",
+    "loca": "loja",
+}
 
 
 def tts_cleanup(text):
@@ -24,7 +30,10 @@ def tts_cleanup(text):
         if any(c in _TURKISH_CHARS for c in inner):
             return f"({inner})"
         return " "
-    return re.sub(r"\s+", " ", _PAREN.sub(_repl, text)).strip()
+    text = _PAREN.sub(_repl, text)
+    for k, v in PRONUNCIATION_MAP.items():
+        text = text.replace(k, v)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _supabase():

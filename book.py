@@ -19,9 +19,20 @@ _OVERLONG_SPLIT = re.compile(r"(?<=[,:—])\s+")
 _TURKISH_CHARS = set("çğıöşüâîûÇĞİÖŞÜÂÎÛ")
 _PAREN = re.compile(r"\(([^()]*)\)")
 
+# Telaffuz duzeltmeleri: sorunlu kelimelerin yazildigi gibi okunmasi icin
+# fonetik yazimlar (display'de degil, sadece seslendirmede uygulanir).
+# Mason -> "a" harfi "e" okunuyordu; "â" uzun "a" verir.
+# Loca -> "c" harfi "k" okunuyordu (Italyanca); "j" /dʒ/~ yakin ses verir.
+PRONUNCIATION_MAP = {
+    "Mason": "Mâson",
+    "mason": "mâson",
+    "Loca": "Loja",
+    "loca": "loja",
+}
+
 
 def tts_cleanup(text: str) -> str:
-    """TTS icin metni temizler: Ingilizce gloss parantezlerini cikarir."""
+    """TTS icin metni temizler: gloss parantezlerini cikarir + telaffuzu duzeltir."""
     def _repl(m: "re.Match[str]") -> str:
         inner = m.group(1)
         if any(c in _TURKISH_CHARS for c in inner):
@@ -29,6 +40,8 @@ def tts_cleanup(text: str) -> str:
         return " "
 
     text = _PAREN.sub(_repl, text)
+    for k, v in PRONUNCIATION_MAP.items():
+        text = text.replace(k, v)
     return re.sub(r"\s+", " ", text).strip()
 
 
