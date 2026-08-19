@@ -5,7 +5,7 @@ from typing import List, Optional
 
 
 MAX_SENTENCE_CHARS = 300
-MIN_SENTENCE_CHARS = 40
+SEGMENT_TARGET_CHARS = 300
 
 
 _DECORATIVE_SYMBOLS = re.compile("[\u2600-\u27BF\uFE0F]+")
@@ -13,6 +13,23 @@ _ROMAN_MARKER = re.compile(r"^[IVX]{1,4}\.\s*")
 _MD_EMPH = re.compile(r"[*_~`]+")
 _SENT_SPLIT = re.compile(r"(?<=[.!?…;])\s+")
 _OVERLONG_SPLIT = re.compile(r"(?<=[,:—])\s+")
+
+# Seslendirme metni temizligi: Ingilizce parantez aciklamalari (gloss) atilir,
+# boylece VoxCPM metni Turkce okur ("Mason" -> Turkce "mason" gibi).
+_TURKISH_CHARS = set("çğıöşüâîûÇĞİÖŞÜÂÎÛ")
+_PAREN = re.compile(r"\(([^()]*)\)")
+
+
+def tts_cleanup(text: str) -> str:
+    """TTS icin metni temizler: Ingilizce gloss parantezlerini cikarir."""
+    def _repl(m: "re.Match[str]") -> str:
+        inner = m.group(1)
+        if any(c in _TURKISH_CHARS for c in inner):
+            return f"({inner})"
+        return " "
+
+    text = _PAREN.sub(_repl, text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 @dataclass
@@ -91,20 +108,19 @@ def _split_paragraph(text: str, para_id: str, seg_id_start: int) -> List[Segment
         cleaned = _clean_sentence(s)
         if not cleaned:
             continue
-        fragments.extend(_split_overlong(cleaned))
+        fragments.extend(_split_overlong(cleaned, MAX_SENTENCE_CHARS))
 
+    # 3-4 cumleyi tek parca halinde birlestir (vurgu/ton tutarliligi icin)
     units: List[str] = []
     buf = ""
     for frag in fragments:
-        buf = f"{buf} {frag}".strip() if buf else frag
-        if len(buf) >= MIN_SENTENCE_CHARS:
+        if buf and len(buf) + 1 + len(frag) > SEGMENT_TARGET_CHARS:
             units.append(buf)
-            buf = ""
-    if buf:
-        if units:
-            units[-1] = f"{units[-1]} {buf}".strip()
+            buf = frag
         else:
-            units.append(buf)
+            buf = f"{buf} {frag}".strip() if buf else frag
+    if buf:
+        units.append(buf)
 
     result: List[Segment] = []
     for i, seg_text in enumerate(units):

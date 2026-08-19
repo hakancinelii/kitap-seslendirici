@@ -193,9 +193,14 @@ function playOn(player, url) {
 
 function highlight() {
   const seg = state.segments[state.currentIndex];
+  document.querySelectorAll(".book p").forEach((p) => p.classList.remove("reading"));
   if (!seg) return;
   const span = document.querySelector(`.book .sentence[data-seg-id="${seg.id}"]`);
-  if (span) span.scrollIntoView({ behavior: "smooth", block: "center" });
+  if (span) {
+    const p = span.closest("p");
+    if (p) p.classList.add("reading");
+    span.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 }
 
 async function playFrom(start) {
@@ -236,6 +241,13 @@ async function playFrom(start) {
       stopPlayback();
       return;
     }
+
+    // Nefes payi: paragraf gecisinde daha uzun bekle
+    const nextSeg = state.segments[state.currentIndex + 1];
+    const isParagraphBreak = nextSeg && nextSeg.para_id !== seg.para_id;
+    await sleep(isParagraphBreak ? 1200 : 650);
+    if (!state.playing) break;
+
     state.currentIndex++;
     savePosition();
     preloadInto(state.currentIndex + 1);

@@ -114,9 +114,13 @@ html, body {
   padding: 12px 14px;
   border-radius: 8px;
   cursor: pointer;
-  transition: background 0.2s ease, box-shadow 0.2s ease;
+  transition: background 0.3s ease, box-shadow 0.3s ease;
 }
 .book p:hover { background: #efeae0; }
+.book p.reading {
+  background: #fdf6e0;
+  box-shadow: inset 3px 0 0 #e0bd5c;
+}
 
 .book .sentence {
   padding: 2px 1px;

@@ -25,7 +25,7 @@ import requests
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR))
 
-from book import parse_book  # noqa: E402
+from book import parse_book, tts_cleanup  # noqa: E402
 
 # Birinci = resmi ModelBest VoxCPM2 (10 parametre), ikinci = HF demo (8 parametre).
 # NOT: Ses tutarliligi icin TEK backend kullanilir (modelbest). HF demo farkli
@@ -261,7 +261,7 @@ def main() -> int:
                         print(f"  Referans yukleniyor -> {backend.base}")
                         backend.upload_reference(args.reference)
                         ref_uploaded[backend.base] = True
-                    info = backend.generate(seg.text, cfg=args.cfg, denoise=args.denoise, control=args.control)
+                    info = backend.generate(tts_cleanup(seg.text), cfg=args.cfg, denoise=args.denoise, control=args.control)
                     audio = backend.download(info)
                     if len(audio) < 1000:
                         raise RuntimeError("Cok kucuk ses dosyasi (bos sonuc)")

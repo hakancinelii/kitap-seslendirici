@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 
 import requests
@@ -12,6 +13,18 @@ BACKENDS = [
 FIXED_USER_ID = "42"
 
 app = Flask(__name__)
+
+_TURKISH_CHARS = set("çğıöşüâîûÇĞİÖŞÜÂÎÛ")
+_PAREN = re.compile(r"\(([^()]*)\)")
+
+
+def tts_cleanup(text):
+    def _repl(m):
+        inner = m.group(1)
+        if any(c in _TURKISH_CHARS for c in inner):
+            return f"({inner})"
+        return " "
+    return re.sub(r"\s+", " ", _PAREN.sub(_repl, text)).strip()
 
 
 def _supabase():
@@ -162,7 +175,7 @@ def generate(path=""):
             ref_file = None
             if ref_path:
                 ref_file = _upload_reference(session, base, ref_path)
-            audio = _generate_once(session, base, cfg["voxcpm2"], ref_file, text, control)
+            audio = _generate_once(session, base, cfg["voxcpm2"], ref_file, tts_cleanup(text), control)
             if len(audio) < 1000:
                 raise RuntimeError("cok kucuk ses")
             url = supabase_upload(f"audio/{seg_id}.mp3", audio, "audio/mpeg")
