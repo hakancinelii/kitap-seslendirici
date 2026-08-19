@@ -135,8 +135,14 @@ def _split_paragraph(text: str, para_id: str, seg_id_start: int) -> List[Segment
     return result
 
 
-def parse_book(path: str | Path) -> Book:
-    lines = Path(path).read_text(encoding="utf-8").splitlines()
+def parse_book(paths) -> Book:
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+
+    lines: List[str] = []
+    for p in paths:
+        lines.extend(Path(p).read_text(encoding="utf-8").splitlines())
+        lines.append("")
 
     title = ""
     items: list = []
@@ -173,6 +179,8 @@ def parse_book(path: str | Path) -> Book:
             level = len(stripped) - len(stripped.lstrip("#"))
             heading_text = stripped.lstrip("#").strip()
             if level == 1:
+                if heading_text == title:
+                    continue
                 title = heading_text or title
             items.append(Heading(id=f"h{len(items)}", level=level, text=heading_text))
             continue
@@ -181,4 +189,4 @@ def parse_book(path: str | Path) -> Book:
 
     flush_paragraph()
 
-    return Book(title=title or Path(path).stem, items=items, paragraphs=paragraphs, segments=segments)
+    return Book(title=title or Path(paths[0]).stem, items=items, paragraphs=paragraphs, segments=segments)

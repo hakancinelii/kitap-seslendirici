@@ -200,7 +200,7 @@ def main() -> int:
 
     _load_env(BASE_DIR / ".env.local")
 
-    book = parse_book(BASE_DIR / "translation_01.md")
+    book = parse_book([BASE_DIR / "translation_01.md", BASE_DIR / "translation_02.md"])
     segments = book.segments
     end = args.end if args.end is not None else len(segments)
     if args.count is not None:
